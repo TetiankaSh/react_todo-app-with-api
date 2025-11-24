@@ -8,7 +8,7 @@ interface MainSectionProps {
   todos: Todo[];
   visibleTodos: Todo[];
   handleDelete: (todoId: number) => Promise<void>;
-  deletingTodoId: number | null;
+  deletingTodoIds: Set<number>;
   handleUpdate: (todoId: number, updatedFields: Partial<Todo>) => Promise<void>;
   updatingTodoId: number | null;
 }
@@ -17,7 +17,7 @@ export const MainSection: React.FC<MainSectionProps> = ({
   todos,
   visibleTodos,
   handleDelete,
-  deletingTodoId,
+  deletingTodoIds,
   handleUpdate,
   updatingTodoId,
 }) => {
@@ -30,7 +30,7 @@ export const MainSection: React.FC<MainSectionProps> = ({
               key={todo.id}
               todo={todo}
               handleDelete={handleDelete}
-              isLoading={deletingTodoId === todo.id}
+              isLoading={deletingTodoIds.has(todo.id)}
               handleUpdate={handleUpdate}
               isUpdating={updatingTodoId === todo.id}
             />

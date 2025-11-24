@@ -14,7 +14,6 @@ import { TodoItem } from './components/TodoItem';
 
 export const App: React.FC = () => {
   const [title, setTitle] = useState('');
-  // const [isLoading, setIsLoading] = useState(false);
   const [loadTodosError, setLoadTodosError] = useState('');
   const [titleError, setTitleError] = useState('');
   const [addTodosError, setAddTodosError] = useState('');
@@ -29,7 +28,7 @@ export const App: React.FC = () => {
 
   const [tempTodo, setTempTodo] = useState<Omit<Todo, 'id'> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [deletingTodoId, setDeletingTodoId] = useState<number | null>(null);
+  const [deletingTodoIds, setDeletingTodoIds] = useState(new Set<number>());
 
   const [updatingTodoId, setUpdatingTodoId] = useState<number | null>(null);
 
@@ -81,15 +80,22 @@ export const App: React.FC = () => {
 
   const handleDelete = async (todoId: number) => {
     setDeleteTodosError('');
-    setDeletingTodoId(todoId);
+    setDeletingTodoIds(prevIds => new Set(prevIds).add(todoId));
 
     try {
       await client.delete(`/todos/${todoId}`);
       setTodos(currentTodos => currentTodos.filter(todo => todo.id !== todoId));
     } catch (err) {
       setDeleteTodosError('Unable to delete a todo');
+      throw err;
     } finally {
-      setDeletingTodoId(null);
+      setDeletingTodoIds(prevIds => {
+        const newIds = new Set(prevIds);
+
+        newIds.delete(todoId);
+
+        return newIds;
+      });
 
       if (newTodoInputRef.current) {
         const inputElement = newTodoInputRef.current;
@@ -341,7 +347,7 @@ export const App: React.FC = () => {
           todos={todos}
           visibleTodos={visibleTodos}
           handleDelete={handleDelete}
-          deletingTodoId={deletingTodoId}
+          deletingTodoIds={deletingTodoIds}
           handleUpdate={handleUpdate}
           updatingTodoId={updatingTodoId}
         />
@@ -367,7 +373,6 @@ export const App: React.FC = () => {
 
       <div
         data-cy="ErrorNotification"
-        // FIX 17: Use conditional class to hide/show the notification
         className={classNames(
           'notification is-danger is-light has-text-weight-normal',
           {

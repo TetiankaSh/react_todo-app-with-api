@@ -64,8 +64,10 @@ export const TodoItem: React.FC<TodoItemProps> = ({
     }
 
     if (trimmedTitle === '') {
-      await handleDelete(todoIdForPermanent);
-      setIsEditing(false);
+      try {
+        await handleDelete(todoIdForPermanent);
+        setIsEditing(false);
+      } catch (err) {}
 
       return;
     }
