@@ -23,7 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   newTodoInputRef,
   handleToggleAll,
 }) => {
-  const isToggleVisible = todos.length > 0;
+  const isToggleVisible = !!todos.length;
 
   return (
     <header className="todoapp__header">

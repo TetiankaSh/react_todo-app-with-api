@@ -2,7 +2,13 @@
 /* eslint-disable jsx-a11y/control-has-associated-label */
 import React, { useEffect, useRef, useState } from 'react';
 import { UserWarning } from './UserWarning';
-import { USER_ID } from './api/todos';
+import {
+  USER_ID,
+  addTodo,
+  deleteTodo,
+  updateTodo,
+  getTodos,
+} from './api/todos';
 import { Todo } from './types/Todo';
 import { client } from './utils/fetchClient';
 import classNames from 'classnames';
@@ -11,20 +17,17 @@ import { MainSection } from './components/MainSection';
 import { Footer } from './components/Footer';
 import { FilterStatus } from './types/FilterStatus';
 import { TodoItem } from './components/TodoItem';
+import { ErrorMessages } from './types/ErrorMessages';
 
 export const App: React.FC = () => {
   const [title, setTitle] = useState('');
-  const [loadTodosError, setLoadTodosError] = useState('');
-  const [titleError, setTitleError] = useState('');
-  const [addTodosError, setAddTodosError] = useState('');
-  const [updateTodosError, setUpdateTodosError] = useState('');
-  const [deleteTodosError, setDeleteTodosError] = useState('');
+  const [currentError, setCurrentError] = useState<ErrorMessages | ''>('');
   const [todos, setTodos] = useState<Todo[]>([]);
   const [isAppLoading, setIsAppLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>(
     FilterStatus.All,
   );
-  const [errorTimerId, setErrorTimerId] = useState<number | null>(null);
+  const errorTimerId = useRef<number | null>(null);
 
   const [tempTodo, setTempTodo] = useState<Omit<Todo, 'id'> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -48,22 +51,22 @@ export const App: React.FC = () => {
     setTempTodo(newTodoData);
 
     if (trimmedTitle === '') {
-      setTitleError('Title should not be empty');
+      setCurrentError(ErrorMessages.EmptyTitleError);
 
       return;
     }
 
-    setAddTodosError('');
+    setCurrentError('');
     setIsProcessing(true);
     setTempTodo(newTodoData);
 
     try {
-      const createdTodo = await client.post<Todo>('/todos', newTodoData);
+      const createdTodo = await addTodo(trimmedTitle);
 
       setTodos(currentTodos => [...currentTodos, createdTodo]);
       setTitle('');
     } catch (err) {
-      setAddTodosError('Unable to add a todo');
+      setCurrentError(ErrorMessages.AddTodoError);
     } finally {
       setIsProcessing(false);
       setTempTodo(null);
@@ -79,14 +82,14 @@ export const App: React.FC = () => {
   };
 
   const handleDelete = async (todoId: number) => {
-    setDeleteTodosError('');
+    setCurrentError('');
     setDeletingTodoIds(prevIds => new Set(prevIds).add(todoId));
 
     try {
-      await client.delete(`/todos/${todoId}`);
+      await deleteTodo(todoId);
       setTodos(currentTodos => currentTodos.filter(todo => todo.id !== todoId));
     } catch (err) {
-      setDeleteTodosError('Unable to delete a todo');
+      setCurrentError(ErrorMessages.DeleteTodoError);
       throw err;
     } finally {
       setDeletingTodoIds(prevIds => {
@@ -114,11 +117,11 @@ export const App: React.FC = () => {
       return;
     }
 
-    setDeleteTodosError('');
+    setCurrentError('');
     setIsProcessing(true);
 
     const deletionPromises = completedTodos.map(todo => {
-      return client.delete(`/todos/${todo.id}`);
+      return deleteTodo(todo.id);
     });
 
     try {
@@ -138,10 +141,10 @@ export const App: React.FC = () => {
       );
 
       if (failedDeletions.length > 0) {
-        setDeleteTodosError('Unable to delete a todo');
+        setCurrentError(ErrorMessages.DeleteTodoError);
       }
     } catch (err) {
-      setDeleteTodosError('Unable to delete a todo');
+      setCurrentError(ErrorMessages.DeleteTodoError);
     } finally {
       setIsProcessing(false);
 
@@ -156,20 +159,17 @@ export const App: React.FC = () => {
   };
 
   const handleUpdate = async (todoId: number, updatedFields: Partial<Todo>) => {
-    setUpdateTodosError('');
+    setCurrentError('');
     setUpdatingTodoId(todoId);
 
     try {
-      const updatedTodo = await client.patch<Todo>(
-        `/todos/${todoId}`,
-        updatedFields,
-      );
+      const updatedTodo = await updateTodo(todoId, updatedFields);
 
       setTodos(currentTodos =>
         currentTodos.map(todo => (todo.id === todoId ? updatedTodo : todo)),
       );
     } catch (err) {
-      setUpdateTodosError('Unable to update a todo');
+      setCurrentError(ErrorMessages.UpdateTodoError);
       throw err;
     } finally {
       setUpdatingTodoId(null);
@@ -192,7 +192,7 @@ export const App: React.FC = () => {
       return;
     }
 
-    setUpdateTodosError('');
+    setCurrentError('');
     setIsProcessing(true);
 
     const updatingPromises = todosToChange.map(todo => {
@@ -222,10 +222,10 @@ export const App: React.FC = () => {
       );
 
       if (failedUpdatingIds.length > 0) {
-        setUpdateTodosError('Unable to update a todo');
+        setCurrentError(ErrorMessages.UpdateTodoError);
       }
     } catch (err) {
-      setUpdateTodosError('Unable to update a todo');
+      setCurrentError(ErrorMessages.UpdateTodoError);
     } finally {
       setIsProcessing(false);
 
@@ -239,12 +239,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const error =
-    loadTodosError ||
-    titleError ||
-    addTodosError ||
-    updateTodosError ||
-    deleteTodosError;
+  const error = currentError;
 
   const visibleTodos = (todos || []).filter(todo => {
     switch (filterStatus) {
@@ -264,16 +259,14 @@ export const App: React.FC = () => {
   useEffect(() => {
     const loadTodos = async () => {
       setIsAppLoading(true);
-      setLoadTodosError('');
+      setCurrentError('');
 
       try {
-        const fetchedTodos = await client.get<Todo[]>(
-          `/todos?userId=${USER_ID}`,
-        );
+        const fetchedTodos = await getTodos();
 
         setTodos(fetchedTodos);
       } catch (err) {
-        setLoadTodosError('Unable to load todos');
+        setCurrentError(ErrorMessages.LoadTodosError);
       } finally {
         setIsAppLoading(false);
       }
@@ -283,32 +276,26 @@ export const App: React.FC = () => {
   }, []);
 
   const hideError = () => {
-    setLoadTodosError('');
-    setTitleError('');
-    setAddTodosError('');
-    setDeleteTodosError('');
-    setUpdateTodosError('');
+    setCurrentError('');
   };
 
   useEffect(() => {
-    let timerId: number | null = null;
-
     if (error) {
-      if (errorTimerId !== null) {
-        clearTimeout(errorTimerId);
-        setErrorTimerId(null);
+      if (errorTimerId.current !== null) {
+        clearTimeout(errorTimerId.current);
+        errorTimerId.current = null;
       }
 
-      timerId = setTimeout(() => {
+      const newTimerId = setTimeout(() => {
         hideError();
       }, 3000) as unknown as number;
 
-      setErrorTimerId(timerId);
+      errorTimerId.current = newTimerId;
     }
 
     return () => {
-      if (timerId !== null) {
-        clearTimeout(timerId);
+      if (errorTimerId.current !== null) {
+        clearTimeout(errorTimerId.current);
       }
     };
   }, [error]);
